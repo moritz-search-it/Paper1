@@ -1,43 +1,27 @@
 ---
-output: 
-  pdf_document:
-    citation_package: natbib
-    keep_tex: true
-    fig_caption: true
-    toc: yes
-    latex_engine: pdflatex
-  word_document: 
-    toc: yes
-    fig_caption: true
-  html_document:
-    keep_md: true
-    number_sections: yes
-    toc: yes
-classoption: a4paper
-header-includes:
-  - \usepackage{hyperref}
-  - \setlength\parindent{0pt}
-  - \usepackage{pdflscape}
-  - \usepackage{booktabs}
-  - \newcommand{\blandscape}{\begin{landscape}} #vereinfachter befehl
-  - \newcommand{\elandscape}{\end{landscape}} #vereinfachter befehl
-biblio-style: apsr
-title: "Visualisation Paper BraveNewMeat"
+
+title:
+ "Visualisation Paper BraveNewMeat"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
-geometry: margin=1in
-fontfamily: mathpazo
-fontsize: 11pt
+output:
+  github_document:
+    toc: true
+
 ---
 
 ```{r setup, include=FALSE}
 # global information for rendering markdown
-knitr::opts_chunk$set(cache = FALSE,
-                      message = FALSE,
-                      warning = FALSE,
-                      echo = FALSE)
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	cache = FALSE
+)
 ```
 
-```{r loadLibraries, include=FALSE}
+# Visualisation Paper BraveNewMeat
+
+```{r loadLibraries, include=TRUE}
 
 #load all needed packages
 library(dplyr)
@@ -45,22 +29,18 @@ library(tidyr)
 library(stringr)
 library(readxl)
 library(ggplot2)
-library(ggpubr)
+library(knitr)
 library(openxlsx)
-library(kableExtra)
 library(RColorBrewer)
 library(scales)
 library(patchwork)
-library(ggpattern)  
-
-
 
 theme_set(theme_bw(base_size = 45))
 #  scale_fill_manual(values = cbp1)+
 #theme_set(legend.position = "top")
 ```
 
-```{r setPaths, include=FALSE}
+```{r setPaths, include=TRUE}
 rm(list = ls())
 
 
@@ -68,7 +48,7 @@ rm(list = ls())
 projectPath <- here::here()
 
 #working directories input and output
-input_path <- file.path("~/mnt/Data-Work-RE/27_Natural_Resources-RE/275.1 Ökobilanzen_Methoden/OptiSignFood_2021-2024/3_Work/WPadd_Alternatives/5_PaperB_Bravenewmeat/Paper_finished")
+input_path <- file.path("~/Documents/Projekte/Paper1")
 working_dir_output <- file.path(projectPath, "results")
 
 # if no folder with results exists, create a folder with the name results
@@ -80,377 +60,687 @@ if (!dir.exists("results")) {
 # The colorblind palette
 cbp1 <- c("#000000", "#E69F00", "#56B4E9", "#009E73","#999999",
           "#0072B2","#F0E442","#D55E00", "#CC79A7", "yellowgreen")
-"rgba(255, 255, 255, 0)"
+# "rgba(255, 255, 255, 0)"
 
 ```
 
-# Inroduction
-This is the markdown file for the visualisation of the results from the scientific research under the name "BraveNewMeat". The data curator and main author Morit Herrmann created and validated the data and takes full responsibility.
+## Inroduction
+This markdown file presents the visualization of results from the scientific research project **"BraveNewMeat."** The data were curated and validated by Morit Herrmann, who takes full responsibility for their accuracy.  
 
-## Contribution analysis
 
-```{r contribution, include=FALSE}
-data_cont <- read_excel(file.path(input_path,"Results_v4.xlsx"),
-                   sheet = "ForR_cont", 
-                   col_types = c(rep("text",4), rep("numeric",42)))
+### Contribution analysis
 
+The PBMA is composed of six ingredients and three processing steps. Their contributions to **GWP100, total land use, freshwater eutrophication, acidification, and water scarcity** are shown below. Minor ingredients, such as seasonings were omitted if env. impact was below cut-off (< 1 \%), but the binding agent, methylcellulose, was retained. In addition to the extruded soybean protein concentrate, **refined rapeseed oil** contributes substantially to the overall environmental impacts. Varying the oil source (sunflower, olive, or soybean) did not produce significant changes in the total contribution (data not shown). For the soy-based drink and tofu, **soybeans** are the primary contributor.
+
+
+```{r contribution, include=TRUE, echo=TRUE}
+# Load data
+data_cont <- read_excel(
+  file.path(input_path, "Results_v4.xlsx"),
+  sheet = "ForR_cont",
+  col_types = c(rep("text", 4), rep("numeric", 42))
+)
+
+# Distinguish between raw material and processing
+# Do not use the data simultaneously
+data_cont <- data_cont %>%
+  mutate(rawm = ifelse(is.na(rawm), "processing", "raw material"))
+
+# Select and tidy data
+data_cont_tidy <- data_cont %>%
+  select(
+    1:4,
+    "CED [MJ]",
+    "GWP100 [kg CO2-eq]",
+    "Land-occ [m2a]",
+    "Water-scar [m3]",
+    "Eutr-fw [kg P-eq]",
+    "Acid-terr [kg SO2-eq]"
+  ) %>%
+  pivot_longer(
+    cols = 5:10,
+    names_to = "impact",
+    values_to = "value"
+  ) %>%
+  mutate(
+    impact = factor(
+      impact,
+      levels = c(
+        "CED [MJ]",
+        "GWP100 [kg CO2-eq]",
+        "Water-scar [m3]",
+        "Land-occ [m2a]",
+        "Acid-terr [kg SO2-eq]",
+        "Eutr-fw [kg P-eq]"
+      )
+    )
+  )
+
+# Calculate percentage for stacked columns
+data_cont_tidy_perc <- data_cont_tidy %>%
+  group_by(item, impact, rawm, country) %>%
+  mutate(total = sum(value)) %>%
+  ungroup() %>%
+  mutate(percentage = (value / total) * 100)
 
 ```
-The PBMA is modeled with six ingredients and three processes and their contribution to GWP100, total land use, eutrophication freshwater, acidification and water scarcity is shown below. Supplementation and other minor ingredients (seasoning) were cut-off (< 1 \%) but not the binding agent, methylcellulose. Besides the extruded soybean protein concentrate, the refined rapeseed oil holds major shares for the overall environmental impacts. Varying the source of oil (sunflower, olive, soybean) did not hold any significant changes to the overall contribution (not shown). For the soy-based drink and tofu, soybeans are the main contributor.
 
-```{r Contribution, include=FALSE}
-# distinguish between raw m. vs processed (raw material) and distinguish between processing (processing)
-# do not use the data simultanously
-data_cont <- data_cont %>% mutate(rawm =ifelse(is.na(rawm), "processing", "raw material"))
+Graphs are saved in the `results` folder in **JPEG and EPS** formats, separately for CH and for the sensitivity analysis using Brazilian soybeans.  
 
-# select and tidy data
-data_cont_tidy <- data_cont %>% select(c(1:4,"CED [MJ]", "GWP100 [kg CO2-eq]","Land-occ [m2a]","Water-scar [m3]", "Eutr-fw [kg P-eq]", "Acid-terr [kg SO2-eq]")) %>% 
-  pivot_longer(cols=c(5:10),names_to = "impact", values_to = "value") %>% mutate(impact = factor(impact, levels=c("CED [MJ]", "GWP100 [kg CO2-eq]", "Water-scar [m3]", "Land-occ [m2a]", "Acid-terr [kg SO2-eq]", "Eutr-fw [kg P-eq]")))
+```{r Graphs contribution, include=FALSE}
+########### Producing graphs, stored in "result" ###########
 
-# percent for stacked columns
-data_cont_tidy_perc <- data_cont_tidy %>% group_by(item,impact,rawm, country) %>%
-  mutate(total = sum(value)) %>% ungroup() %>%
-  mutate(percentage = (value/total)*100) 
+for (x in c("CH", "BR")) {
 
-
-########### graphs
-
- for (x in c("CH", "BR")) {
-
+  # Color palette adjustments
   cbp1_new <- cbp1[2:10]
 
-  cont1 <- data_cont_tidy_perc %>% filter(country == x,
-                                          item == "SBMA",
-                                          rawm =="raw material") %>%
-            mutate(Unit = factor(Unit,levels=c(paste0("Soybeans, ",x), "Rape seeds, CH",
-                      "Potatoes, CH","Carboxymethyl cellulose", "Processing"))) %>% 
-        ggplot(aes(impact,percentage, fill=Unit)) +
-        geom_col(position = position_stack())+
-        scale_fill_manual(values = cbp1_new) +
-          labs( x="", y="Contribution analysis [%]", fill="") +
-         # scale_x_discrete(labels = label_wrap(width=12)) +
-            theme( axis.text.x = element_text(size = 50, angle = 45,hjust = 1),
-                   legend.text = element_text(size = 55)) #change angle, center it, aligned to the right side with hjust
-           # guides(fill=guide_legend(ncol=2))
+  # ----- SBMA -----
+  cont1 <- data_cont_tidy_perc %>%
+    filter(country == x, item == "SBMA", rawm == "raw material") %>%
+    mutate(
+      Unit = factor(
+        Unit,
+        levels = c(
+          paste0("Soybeans, ", x),
+          "Rape seeds, CH",
+          "Potatoes, CH",
+          "Carboxymethyl cellulose",
+          "Processing"
+        )
+      )
+    ) %>%
+    ggplot(aes(impact, percentage, fill = Unit)) +
+    geom_col(position = position_stack()) +
+    scale_fill_manual(values = cbp1_new) +
+    labs(x = "", y = "Contribution analysis [%]", fill = "") +
+    theme(
+      axis.text.x = element_text(size = 50, angle = 45, hjust = 1),
+      legend.text = element_text(size = 55)
+    )
 
+  ggsave(
+    plot = cont1,
+    file.path(working_dir_output, paste0("contribution_PBMA_", x, ".jpeg")),
+    device = "jpeg", width = 30, height = 20, dpi = "retina"
+  )
+  ggsave(
+    plot = cont1,
+    file.path(working_dir_output, paste0("contribution_PBMA_", x, ".eps")),
+    device = "eps", width = 30, height = 20
+  )
 
-      ggsave(plot=cont1,file.path(working_dir_output,paste0("contribution_PBMA_", x, ".jpeg")),
-                                  device = "jpeg", width = 30,height = 20, dpi="retina")
-      ggsave(plot=cont1,file.path(working_dir_output,paste0("contribution_PBMA_",x,".eps")), device = "eps", width = 30,height = 20)
+  # ----- Tofu -----
+  cbp1_new <- cbp1[c(2, 6)]
 
+  cont2 <- data_cont_tidy_perc %>%
+    filter(country == x, item == "Tofu, plain", rawm == "raw material") %>%
+    mutate(Unit = factor(Unit, levels = c(paste0("Soybeans, ", x), "Processing"))) %>%
+    ggplot(aes(impact, percentage, fill = Unit)) +
+    geom_col(position = position_stack()) +
+    scale_fill_manual(values = cbp1_new) +
+    labs(x = "", y = "Contribution analysis [%]", fill = "") +
+    theme(axis.text.x = element_blank())
 
-  cbp1_new <- cbp1[c(2,6)]
+  # ----- Soydrink -----
+  cont3 <- data_cont_tidy_perc %>%
+    filter(country == x, item == "Soydrink, plain", rawm == "raw material") %>%
+    mutate(Unit = factor(Unit, levels = c(paste0("Soybeans, ", x), "Processing"))) %>%
+    ggplot(aes(impact, percentage, fill = Unit)) +
+    geom_col(position = position_stack()) +
+    scale_fill_manual(values = cbp1_new) +
+    labs(x = "", y = "Contribution analysis [%]", fill = "") +
+    theme(axis.text.x = element_blank())
 
-  cont2 <- data_cont_tidy_perc %>% filter(country == x,
-                                          item == "Tofu, plain",
-                                          rawm =="raw material") %>%
-                      mutate(Unit = factor(Unit,levels=c(paste0("Soybeans, ",x), "Processing"))) %>% 
-        ggplot(aes(impact,percentage, fill=Unit)) +
-        geom_col(position = position_stack())+
-        scale_fill_manual(values = cbp1_new) +
-          labs( x="", y="Contribution analysis [%]", fill="") +
-         # scale_x_discrete(labels = label_wrap(width=12))+
-          theme(axis.text.x = element_blank())
-         #  guides(fill=guide_legend(ncol=2))
+  # ----- Cooked soybeans -----
+  cont4 <- data_cont_tidy_perc %>%
+    filter(country == x, item == "soybeans, cooked", rawm == "processing") %>%
+    mutate(Unit = factor(Unit, levels = c(paste0("Soybeans, ", x), "Processing"))) %>%
+    ggplot(aes(impact, percentage, fill = Unit)) +
+    geom_col(position = position_stack()) +
+    scale_fill_manual(values = cbp1_new) +
+    labs(x = "", y = "Contribution analysis [%]", fill = "") +
+    theme(
+      axis.text.x = element_text(size = 50, angle = 45, hjust = 1),
+      legend.text = element_text(size = 55)
+    )
 
-#ggsave(file.path(working_dir_output,"contribution_tofu.jpeg"),device = "jpeg", width = 30, height = 20)
-#ggsave(file.path(working_dir_output,"contribution_tofu.eps"), device = "eps")
+  # Combine plots
+  combined_plot <- cont2 / cont3 / cont4 +
+    plot_layout(axes = "collect", guides = "collect") +
+    plot_annotation(tag_levels = "A")
 
-  cont3 <- data_cont_tidy_perc %>% filter(country == x,
-                                          item == "Soydrink, plain",
-                                          rawm =="raw material") %>%
-                        mutate(Unit = factor(Unit,levels=c(paste0("Soybeans, ",x), "Processing"))) %>% 
-      ggplot(aes(impact,percentage, fill=Unit)) +
-      geom_col(position = position_stack())+
-      scale_fill_manual(values = cbp1_new) +
-        labs( x="", y="Contribution analysis [%]", fill="") +
-     #   scale_x_discrete(labels = label_wrap(width=12))+
-          theme(axis.text.x = element_blank())
-         #  guides(fill=guide_legend(ncol=2))
-
-
-#ggsave(file.path(working_dir_output,"contribution_soydrink.jpeg"),device = "jpeg", width = 30, height = 20)
-#ggsave(file.path(working_dir_output,"contribution_soydrink.eps"), device = "eps")
-
-
-  cont4 <- data_cont_tidy_perc %>% filter(country == x,
-                                          item == "soybeans, cooked",
-                                          rawm =="processing") %>%
-              mutate(Unit = factor(Unit,levels=c(paste0("Soybeans, ",x), "Processing"))) %>% 
-      ggplot(aes(impact,percentage, fill=Unit)) +
-      geom_col(position = position_stack())+
-      scale_fill_manual(values = cbp1_new) +
-        labs( x="", y="Contribution analysis [%]",fill="") +
-      #  scale_x_discrete(labels = label_wrap(width=12)) 
-          theme( axis.text.x =element_text(size = 50, angle = 45,hjust = 1),
-                 legend.text = element_text(size = 55))
-        #   guides(fill=guide_legend(ncol=2))
-
-    cont2 / cont3 / cont4 +
-        plot_layout(axes = "collect", guides = "collect") +plot_annotation(tag_levels = "A") #+
-  #plot_annotation(title = "Raw materials and Processing",
-  #                subtitle = "Contribution of raw material compared to the processing reveals 50:50 ratio")
-
-    ggsave(file.path(working_dir_output,paste0("contribution_others_",x, ".jpeg")),
-                     device = "jpeg", width = 30, height = 20, dpi="retina")
-    ggsave(file.path(working_dir_output,paste0("contribution_others_",x,".eps")), device = "eps", width = 30,height = 20)
-    
-  }
-
+  # Save combined plot
+  ggsave(
+    file.path(working_dir_output, paste0("contribution_others_", x, ".jpeg")),
+    device = "jpeg", width = 30, height = 20, dpi = "retina"
+  )
+  ggsave(
+    file.path(working_dir_output, paste0("contribution_others_", x, ".eps")),
+    device = "eps", width = 30, height = 20
+  )
+}
 ```
 
-```{r showcont, out.width = '40%'}
-cont1
+![Contribution Analysis for the PBMA.](./results/contribution_PBMA_CH.jpeg)
 
-```
 ## Results
-```{r input, include=FALSE}
-#read the data, in total 50 columns
-data <- read_excel(file.path(input_path,"Results_v4.xlsx"),
-                   sheet = "ForR", 
-                   col_types = c(rep("text",7), rep("numeric",47)))
 
-#remove unused columns (last two) and add information, if not milk, then meat
-data <- data %>% select(-c(53,54))
-#data$mm[is.na(data$mm)] <- "meat" 
+```{r input, include=FALSE}
+########### Read and prepare data ###########
+
+# Read the data (in total 50 columns)
+data <- read_excel(
+  file.path(input_path, "Results_v4.xlsx"),
+  sheet = "ForR",
+  col_types = c(rep("text", 7), rep("numeric", 47))
+)
+
+# Remove unused columns (last two) and add information
+data <- data %>%
+  select(-c(53, 54))
+
+# If not milk, then meat
+# data$mm[is.na(data$mm)] <- "meat"
 data$mm[data$mm == 0] <- "meat"
 
-#tidy the data
-##selected impacts
-selected_data_long <- data %>% select(c(1:7,"CED [MJ]", "GWP100 [kg CO2-eq]","Land-occ [m2a]","Water-scar [m3]", "Eutr-fw [kg P-eq]", "Acid-terr [kg SO2-eq]","NRprot7","LIM2","NRF")) %>% pivot_longer(cols=c(8:16),names_to="impact", values_to ="values")
-selected_data_tidy <- selected_data_long %>% pivot_wider( names_from = "variance", values_from = "values")
+########### Tidy the data ###########
 
-##workaround for removing nrf for qc prot
-selected_data_tidy1 <- selected_data_tidy %>%  filter(nfu =="qc-prot") %>% filter(impact != "NRprot7" &
-                                                                                    impact != "LIM2" &
-                                                                                      impact !="NRF" )
-                                                         
-selected_data_tidy <- selected_data_tidy %>% filter(nfu == "NRprot7_2000kcal") %>% bind_rows(selected_data_tidy1)
+# Select relevant impact indicators
+selected_data_long <- data %>%
+  select(
+    1:7,
+    "CED [MJ]",
+    "GWP100 [kg CO2-eq]",
+    "Land-occ [m2a]",
+    "Water-scar [m3]",
+    "Eutr-fw [kg P-eq]",
+    "Acid-terr [kg SO2-eq]",
+    "NRprot7",
+    "LIM2",
+    "NRF"
+  ) %>%
+  pivot_longer(
+    cols = 8:16,
+    names_to = "impact",
+    values_to = "values"
+  )
+
+# Convert to wide format (variance columns)
+selected_data_tidy <- selected_data_long %>%
+  pivot_wider(
+    names_from = "variance",
+    values_from = "values"
+  )
+
+# Workaround: remove NRF for QC protein
+selected_data_tidy1 <- selected_data_tidy %>%
+  filter(nfu == "qc-prot") %>%
+  filter(!impact %in% c("NRprot7", "LIM2", "NRF"))
+
+selected_data_tidy <- selected_data_tidy %>%
+  filter(nfu == "NRprot7_2000kcal") %>%
+  bind_rows(selected_data_tidy1)
+
 rm(selected_data_tidy1)
-#factor item 
-selected_data_tidy <- selected_data_tidy %>% mutate(item = factor(item,levels=c("Beef (CH), minced",
-                                                                                "Chicken (CH) meat",
-                                                                                "SBMA",
-                                                                                "Tofu, plain",
-                                                                                "Soybeans, cooked",
-                                                                                "Cow milk (CH), UHT",
-                                                                                "Soydrink, UHT")))
-#factor impacts
-selected_data_tidy <- selected_data_tidy %>% mutate(impact = factor(impact, levels=c("CED [MJ]", "GWP100 [kg CO2-eq]","Land-occ [m2a]","Water-scar [m3]", "Eutr-fw [kg P-eq]", "Acid-terr [kg SO2-eq]","NRprot7","LIM2","NRF")))
 
+# Factorize items
+selected_data_tidy <- selected_data_tidy %>%
+  mutate(
+    item = factor(
+      item,
+      levels = c(
+        "Beef (CH), minced",
+        "Chicken (CH) meat",
+        "SBMA",
+        "Tofu, plain",
+        "Soybeans, cooked",
+        "Cow milk (CH), UHT",
+        "Soydrink, UHT"
+      )
+    )
+  )
 
-#allimpacts
-data_full_long <- data %>% pivot_longer(cols= c(8:52),names_to="impact", values_to ="values")
-data_full_tidy <- data_full_long %>% pivot_wider( names_from = "variance", values_from = "values")
+# Factorize impacts
+selected_data_tidy <- selected_data_tidy %>%
+  mutate(
+    impact = factor(
+      impact,
+      levels = c(
+        "CED [MJ]",
+        "GWP100 [kg CO2-eq]",
+        "Land-occ [m2a]",
+        "Water-scar [m3]",
+        "Eutr-fw [kg P-eq]",
+        "Acid-terr [kg SO2-eq]",
+        "NRprot7",
+        "LIM2",
+        "NRF"
+      )
+    )
+  )
 
+########### Prepare full dataset (all impacts) ###########
+
+data_full_long <- data %>%
+  pivot_longer(
+    cols = 8:52,
+    names_to = "impact",
+    values_to = "values"
+  )
+
+data_full_tidy <- data_full_long %>%
+  pivot_wider(
+    names_from = "variance",
+    values_from = "values"
+  )
 ```
-The data consists of `r nrow(data %>% select(item) %>% unique())` items including 3 reference items (chicken, beef, milk) and Plant-based alterantives which are:
 
-* soybeans, cooked
-* Tofu, plain
-* Plant-based meat analogue (PBMA) beef burger
-* Soy-drink
+The dataset contains **`r nrow(data %>% select(item) %>% unique())`** items, including three reference items (chicken, beef, milk) and plant-based alternatives:  
 
-The Environmental Data was calculated using SimaPro and the impact assessment method SALCA v.2. (unpublished) The selected nutritional Functional Unit (nFU) its 1 g of quality-corrected (qc-) protein or 1 Nutrient rich subscore (NRprot7) per 100 kcal. Additional we did sensitivity analysis with +/- 20 \% input of raw material and changing country of origin from Switzerland to Brazil for Plant-based alternatives. Additional, we explored the variation when different reference values for the qc-protein and NR calculations (age, gender) were used.
+* Soybeans, cooked  
+* Tofu, plain  
+* Plant-based meat analogue (PBMA) beef burger  
+* Soy-drink  
 
-This results in `r nrow(data %>% group_by(item,nfu,country,reference,gender) %>% summarize(numbers=n()))` unique entries
+Environmental data were calculated using **SimaPro** with the **SALCA v.2** impact assessment method (unpublished). A total of **`r nrow(data_full_tidy %>% select(impact) %>% unique())`** impact categories were included.  
 
+The selected **nutritional functional unit (nFU)** is either:  
 
+* 1 g of **quality-corrected (qc-) protein**  
+* 1 **Nutrient Rich subscore (NRprot7)** per 100 kcal  
+
+Additionally, a **sensitivity analysis** was conducted:  
+
+* ±20% variation in raw material inputs  
+* Changing the country of origin from Switzerland to Brazil for plant-based alternatives  
+* Exploring variations when different reference values for qc-protein and NR calculations (age, gender) were applied  
+
+This results in **`r nrow(data %>% group_by(item,nfu,country,reference,gender) %>% summarize(numbers=n()))`** unique entries. Below, results for **GWP100** are shown.  
+
+```{r results_tab}
+knitr::kable(data_full_tidy%>% filter(impact == "GWP100 [kg CO2-eq]") %>% select(-mm), format="markdown")
+```
+### Preparing the data
+Preparing the results for visualisation, adding reference values to each products impact and split datasets by country/reference for further analysis or plotting
 ```{r results}
 
-# extract reference mean data (for meat = beef, for milk = Cow milk)
-Reference <- selected_data_tidy %>%  group_by(nfu,country,reference,gender,impact,mm) %>%
-  filter(item =="Beef (CH), minced" |
-          item == "Cow milk (CH), UHT") %>% 
-                  select(-ymin, -ymax,-item) %>% rename(mean_m = "mean")
-# Combine and compute percentage
-selected_data_tidy_d1 <-selected_data_tidy %>%  group_by(item,nfu,country,reference,gender,impact,mm) %>%
-  left_join(Reference) %>%
-    mutate(ymin_1 = ((ymin/mean_m)*100),
-           mean_1 = ((mean/mean_m)*100),
-           ymax_1 = ((ymax/mean_m)*100)) %>% ungroup()
+########### Reference-based normalization ###########
+# Compare each product's impacts to a reference (Beef or Cow milk)
+# Values are expressed as % of the reference mean
 
-# we add the variance from different reference values for gender for sensitivity analysis
-selected_data_tidy_d1 <-selected_data_tidy_d1 %>%group_by(item,nfu,country,reference,impact,mm) %>%  mutate(ymin_new1 = min(ymin_1),
-                                 ymax_new1 = max(ymax_1),
-                                 mean_new1 = median(mean_1))%>% ungroup()
+# Extract reference mean data
+# For meat: Beef (CH), minced
+# For milk: Cow milk (CH), UHT
+Reference <- selected_data_tidy %>%
+  group_by(nfu, country, reference, gender, impact, mm) %>%
+  filter(item %in% c("Beef (CH), minced", "Cow milk (CH), UHT")) %>%
+  select(-ymin, -ymax, -item) %>%
+  rename(mean_m = mean)
 
-tidy_d1_CH <- selected_data_tidy_d1 %>% filter(country=="CH", reference =="adult")
-tidy_d1_BR <- selected_data_tidy_d1 %>% filter(country =="BR", reference=="adult")
-tidy_d1_child <- selected_data_tidy_d1 %>% filter(reference == "child")
+# Combine original data with reference means and calculate % differences
+selected_data_tidy_d1 <- selected_data_tidy %>%
+  group_by(item, nfu, country, reference, gender, impact, mm) %>%
+  left_join(
+    Reference,
+    by = c("nfu", "country", "reference", "gender", "impact", "mm")
+  ) %>%
+  mutate(
+    ymin_1 = (ymin / mean_m) * 100,  # Lower bound as % of reference
+    mean_1 = (mean / mean_m) * 100,  # Mean as % of reference
+    ymax_1 = (ymax / mean_m) * 100   # Upper bound as % of reference
+  ) %>%
+  ungroup()
 
-all_d1_datasets <- list(tidy_d1_CH, tidy_d1_BR, tidy_d1_child) 
+# Account for gender variation (sensitivity analysis)
+# Combine male/female data to derive overall min, median, and max
+selected_data_tidy_d1 <- selected_data_tidy_d1 %>%
+  group_by(item, nfu, country, reference, impact, mm) %>%
+  mutate(
+    ymin_new1 = min(ymin_1),
+    ymax_new1 = max(ymax_1),
+    mean_new1 = median(mean_1)
+  ) %>%
+  ungroup()
 
-# Same but Reference is highest entry (mostly beef, sometimes also chicken) !needs to be defined which one is better!
-selected_data_tidy_max<- selected_data_tidy %>%  group_by(nfu,country,reference,gender,impact,mm) %>% mutate(mean_m=max(mean),
-                                                                                ymin_1 = ((ymin/mean_m)*100),
-                                                                                mean_1 = ((mean/mean_m)*100),
-                                                                                ymax_1 = ((ymax/mean_m)*100)) %>% ungroup()
+# Create separate datasets by country and reference group
+tidy_d1_CH    <- selected_data_tidy_d1 %>% filter(country == "CH", reference == "adult")   # Swiss adults
+tidy_d1_BR    <- selected_data_tidy_d1 %>% filter(country == "BR", reference == "adult")   # Brazilian adults
+tidy_d1_child <- selected_data_tidy_d1 %>% filter(reference == "child")                    # Children (both countries)
 
-tidy_max_CH <- selected_data_tidy_max %>% filter(country=="CH", reference =="adult")
-tidy_max_BR <- selected_data_tidy_max %>% filter(country =="BR", reference=="adult")
-tidy_max_child <- selected_data_tidy_max %>% filter(reference == "child")
+# Collect all three datasets into a list for batch processing or plotting
+all_d1_datasets <- list(tidy_d1_CH, tidy_d1_BR, tidy_d1_child)
 
+
+########### Max-based normalization ###########
+# Normalize by the highest mean value in each group
+# (Often beef, sometimes chicken, depending on data)
+# Used as an alternative reference scenario
+
+selected_data_tidy_max <- selected_data_tidy %>%
+  group_by(nfu, country, reference, gender, impact, mm) %>%
+  mutate(
+    mean_m  = max(mean),             # Identify the maximum mean in group
+    ymin_1  = (ymin / mean_m) * 100, # Lower bound as % of max
+    mean_1  = (mean / mean_m) * 100, # Mean as % of max
+    ymax_1  = (ymax / mean_m) * 100  # Upper bound as % of max
+  ) %>%
+  ungroup()
+
+# Split datasets by country/reference for further analysis or plotting
+tidy_max_CH    <- selected_data_tidy_max %>% filter(country == "CH", reference == "adult")   # Swiss adults
+tidy_max_BR    <- selected_data_tidy_max %>% filter(country == "BR", reference == "adult")   # Brazilian adults
+tidy_max_child <- selected_data_tidy_max %>% filter(reference == "child")                    # Children (both countries)
 
 ```
+### nFU (qc-Protein and NRF) Comparison
 
-We want to know the changes when applying different nFU
+We examined the effect of using different nFU metrics. As shown in the data, **when using NRF instead of protein only**, chicken meat—a previously efficient animal product—performs worse relative to plant-based products. This is because plant-based products include other beneficial nutrients such as fiber and unsaturated fats. However, outcomes are highly sensitive to the choice of nutrients included in the NRF.  
 
-```{r comparison, out.width = '40%'}
 
-# set position for errorbar
-dodge <- position_dodge(width=0.9)
+```{r comparison, include=TRUE}
+########### nFU comparison plot (Switzerland, adults) ###########
 
-composition <- tidy_d1_CH %>% ungroup() %>% pivot_wider(names_from = gender, values_from = mean_1) %>% 
-  group_by(nfu,item) %>% filter(item != "Beef (CH), minced" &
-                                item != "Cow milk (CH), UHT" &
-                                        impact == "GWP100 [kg CO2-eq]") %>% mutate(nfu = ifelse(nfu == "NRprot7_2000kcal", "NRprot7", "qc-protein")) 
-  nfu_plot <- composition %>% 
-  ggplot(aes(item,unisex,fill=nfu))+
-    geom_col(position = dodge) +
-    geom_errorbar(aes(ymin=women,ymax=men),position = dodge, width = 0.4,linewidth = 1.5) +
-      #scale_fill_manual(values = cbp1)+
-      scale_fill_brewer(palette = "Dark2")+
-      ylim(0,30) +
-  labs(x = "", y = "GWP100, relative to beef and cow milk [%]") +
-  scale_x_discrete(labels = label_wrap(9))
-nfu_plot
-ggsave(plot=nfu_plot, file.path(working_dir_output,"nFU_comp.jpeg"), device = "jpeg", width = 30, height = 20, dpi="retina")
-ggsave(plot=nfu_plot, file.path(working_dir_output,"nFU_comp.eps"), device = "eps", width = 30,height = 20)
+# Set position for error bars (grouped bars)
+dodge <- position_dodge(width = 0.9)
+
+# Prepare composition data for plotting
+# - Start with CH adult data
+# - Pivot gender columns wide (so 'men' and 'women' are separate)
+# - Keep only GWP impact (climate change)
+# - Exclude reference items (Beef, Cow milk)
+# - Simplify nFU labels for clarity
+composition <- tidy_d1_CH %>%
+  ungroup() %>%
+  pivot_wider(
+    names_from = gender,
+    values_from = mean_1
+  ) %>%
+  group_by(nfu, item) %>%
+  filter(
+    !item %in% c("Beef (CH), minced", "Cow milk (CH), UHT"),
+    impact == "GWP100 [kg CO2-eq]"
+  ) %>%
+  mutate(
+    nfu = ifelse(nfu == "NRprot7_2000kcal", "NRprot7", "qc-protein")
+  )
+
+# Create bar plot comparing nFU systems across food items
+# - Bars show mean values (unisex)
+# - Error bars span from women's to men's values
+nfu_plot <- composition %>%
+  ggplot(aes(item, unisex, fill = nfu)) +
+  geom_col(position = dodge) +
+  geom_errorbar(
+    aes(ymin = women, ymax = men),
+    position = dodge,
+    width = 0.4,
+    linewidth = 1.5
+  ) +
+  scale_fill_brewer(palette = "Dark2") +   # Use a qualitative color palette
+  ylim(0, 30) +                             # Limit y-axis to 0–30%
+  labs(
+    x = "",
+    y = "GWP100, relative to beef and cow milk [%]"
+  ) +
+  scale_x_discrete(labels = label_wrap(9))  # Wrap long x-axis labels
+
+# Save plot in both JPEG and EPS formats
+ggsave(
+  plot = nfu_plot,
+  file.path(working_dir_output, "nFU_comp.jpeg"),
+  device = "jpeg",
+  width = 30, height = 20, dpi = "retina"
+)
+ggsave(
+  plot = nfu_plot,
+  file.path(working_dir_output, "nFU_comp.eps"),
+  device = "eps",
+  width = 30, height = 20
+)
 
 ```
+![Change of nutritional Functional Unit.](./results/nfu_comp.jpeg){width=70%}
 
-As we see from the data, as soon as we use NRF instead of protein only, plant-based products rates higher than animal-based products
+### Visualisation of the environmental impacts
 
-### nFU (qc-Protein and NRF)
+Detailed visualizations are provided for each product and for the three different scenarios. The storage order for the plots is as follows and is found in results:  
 
-More detailled visualisation per product. For storage the following order is set:
- - 1 = CH soy, with adult reference (DIAAS and NRF)
- - 2 = BR soy, with adult reference "" ""
- - 3 = CH soy, with child reference (DIAAS and NRF)
-```{r qc-prot1, include=FALSE}
-cbp1 <- c("#000000", "#E69F00", "#56B4E9", "#009E73","#999999",
-          "#0072B2","#F0E442","#D55E00", "#CC79A7", "yellowgreen")
+* scenario CH soy, adult reference (qc-prot and NRF): ending -1 
+* scenario BR soy, adult reference (qc-prot and NRF): ending -2   
+* scenario CH soy, child reference (qc-prot and NRF): ending -3   
 
-# Loop through each dataset
+```{r qc-prot1, echo=TRUE}
+# =============================================================================
+# Plot generation loop for relative impact comparisons
+# =============================================================================
+# Input:
+#   all_d1_datasets – list of 3 tidy datasets (CH, BR, child)
+#   Each element ('tidy_d1') must contain:
+#       • item       = food item (factor: e.g. "Beef (CH), minced", "Tofu, plain", etc.)
+#       • nfu        = nutritional functional unit ("qc-prot", "NRprot7_2000kcal", ...)
+#       • country    = country code ("CH", "BR", ...)
+#       • reference  = dietary reference group ("adult", "child")
+#       • gender     = gender category ("unisex", "men", "women")
+#       • impact     = environmental impact category (e.g. "GWP100 [kg CO2-eq]")
+#       • mm         = "meat" or "milk" (product category)
+#       • mean_1, ymin_1, ymax_1 = relative values in % (normalized to reference)
+# -----------------------------------------------------------------------------
+
+# Define color palette for plotting
+cbp1 <- c(
+  "#000000", "#E69F00", "#56B4E9", "#009E73", "#999999",
+  "#0072B2", "#F0E442", "#D55E00", "#CC79A7", "yellowgreen"
+)
+
+# Loop through each dataset (CH, BR, child)
 for (i in seq_along(all_d1_datasets)) {
-  #
+
+  # Extract one tidy dataset from the list
   tidy_d1 <- all_d1_datasets[[i]]
 
-   for (nfu_value in c("qc-prot", "NRprot7_2000kcal")) {
-      cbp1_new <- cbp1[c(3, 4, 5)]
-      cbp1_new2 <- cbp1[c(1,2,3,4,5,6,7)]
-      dodge <- position_dodge(width=0.9)
-  
-        aa <- tidy_d1 %>% filter(gender == "unisex",
-                                 impact != "NRprot7"  & impact != "LIM2" & impact !="NRF") %>% 
-          filter(nfu == nfu_value, mm == "meat", item != "Beef (CH), minced" & item != "Chicken (CH) meat")%>%
-          ggplot(aes(impact, mean_1, fill = item)) +
-          geom_col(position = dodge) + 
-          scale_fill_manual(values = cbp1_new) + 
-          geom_errorbar(aes(ymin = ymin_1, ymax = ymax_1), position = dodge, width = 0.5) +
-            labs(x = "", y = "Impacts relative to beef or milk [%]") +
-            theme(legend.position = "none", axis.text.x = element_text( angle = 45,hjust = 1)) 
-          # scale_x_discrete(labels = label_wrap(18)) +
-        #    scale_y_continuous(expand = c(0, 0))
-      
-  
-  ab <- tidy_d1 %>%filter(gender == "unisex",
-                          impact != "NRprot7"  & impact != "LIM2" & impact !="NRF") %>% 
-          filter(nfu == nfu_value) %>%
-          ggplot(aes(impact, mean_1, fill = item)) +
-          geom_col(position = dodge) + 
-          facet_grid(rows = vars(mm), scales = "free", space = "free_y") +
-          scale_fill_manual(values = cbp1_new2) + 
-            geom_hline(yintercept = 100) + 
-              geom_errorbar(aes(ymin = ymin_1, ymax = ymax_1), position = dodge, width = 0.5) + 
-                labs(x = "", y ="") + 
-                theme(legend.position = "right", legend.title = element_blank(),
-                      axis.text.x = element_text(angle = 45,hjust = 1))
-           #     scale_x_discrete(labels = label_wrap(18)) 
-              #  guides(fill = guide_legend(ncol = 2))
+  # Loop through both nutritional functional units
+  for (nfu_value in c("qc-prot", "NRprot7_2000kcal")) {
 
- # abc <- tidy_d1_CH %>% filter(impact == "NR"  | impact == "LIM2") %>% 
-  #        ggplot(aes(impact,mean_new1, fill=item)) +
-   #       geom_col(position = dodge)+
-    #      #facet_grid(rows = vars(mm), scales = "free", space = "free_y") +
-     #     scale_fill_manual(values = cbp1)+
-      #    geom_hline(yintercept = 100)+
-       #       geom_errorbar(aes(ymin=ymin_new1,ymax=  ymax_new1),position = dodge, width = 0.5) +
-        #            labs(x = "", y = " Percentage % relative to beef meat \n and cow milk",
-         #                title="Sub scores of NRF per 100kcal") +#x axis, y axis
-          #          theme(legend.position = "right",legend.title=element_blank(),
-           #               axis.text.x=element_text(size=20),
-            #              legend.text = element_text(size = 35))+ #
-             #                 scale_x_discrete(labels = label_wrap(17)) +
-              #                guides(fill=guide_legend(ncol=1))
+    # Sub-palettes for item coloring
+    cbp1_new  <- cbp1[c(3, 4, 5)]             # small palette for meat-only plots
+    cbp1_new2 <- cbp1[c(1, 2, 3, 4, 5, 6, 7)] # larger palette for faceted plots
+
+    # Define dodging for grouped bars and error bars
+    dodge <- position_dodge(width = 0.9)
+
+    # ---------------------------
+    # Plot A (aa): Meat-only products
+    # - Filters for unisex data
+    # - Excludes NRF, LIM2, and NRprot7 impact categories
+    # - Selects only meat items except reference items (beef & chicken)
+    # - Plots relative impacts vs. impact categories
+    # ---------------------------
+    aa <- tidy_d1 %>%
+      filter(
+        gender == "unisex",
+        impact != "NRprot7" & impact != "LIM2" & impact != "NRF"
+      ) %>%
+      filter(
+        nfu == nfu_value,
+        mm == "meat",
+        item != "Beef (CH), minced" & item != "Chicken (CH) meat"
+      ) %>%
+      ggplot(aes(impact, mean_1, fill = item)) +
+      geom_col(position = dodge) +
+      scale_fill_manual(values = cbp1_new) +
+      geom_errorbar(aes(ymin = ymin_1, ymax = ymax_1), position = dodge, width = 0.5) +
+      labs(x = "", y = "Impacts relative to beef or milk [%]") +
+      theme(
+        legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      )
+
+    # ---------------------------
+    # Plot B (ab): All items (meat + milk)
+    # - Filters for unisex data and valid impacts
+    # - Facets by 'mm' (meat vs. milk products)
+    # - Adds reference line at 100% (reference impact)
+    # ---------------------------
+    ab <- tidy_d1 %>%
+      filter(
+        gender == "unisex",
+        impact != "NRprot7" & impact != "LIM2" & impact != "NRF"
+      ) %>%
+      filter(nfu == nfu_value) %>%
+      ggplot(aes(impact, mean_1, fill = item)) +
+      geom_col(position = dodge) +
+      facet_grid(rows = vars(mm), scales = "free", space = "free_y") +
+      scale_fill_manual(values = cbp1_new2) +
+      geom_hline(yintercept = 100) +
+      geom_errorbar(aes(ymin = ymin_1, ymax = ymax_1), position = dodge, width = 0.5) +
+      labs(x = "", y = "") +
+      theme(
+        legend.position = "right",
+        legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)
+      )
+
+    # ---------------------------
+    # Combine plots A and B using patchwork
+    # Adds annotation tags (A, B, etc.)
+    # ---------------------------
+    plot_combined <- aa + ab + plot_annotation(tag_levels = "A")
+
+    # ---------------------------
+    # Export combined plots to JPEG and EPS formats
+    # - Filenames include nfu and dataset index
+    # ---------------------------
+    ggsave(
+      file.path(working_dir_output, paste0("plot_", nfu_value, "-", i, ".jpeg")),
+      plot_combined,
+      device = "jpeg",
+      width = 30, height = 20, dpi = "retina"
+    )
+
+    ggsave(
+      file.path(working_dir_output, paste0("plot_", nfu_value, "-", i, ".eps")),
+      plot_combined,
+      device = "eps",
+      width = 30, height = 20
+    )
+
+  } # end nfu loop
+} # end dataset loop
+
+```
+
+![Results per qc-prot](./results/plot_qc-prot-1.jpeg)
+
+![Results per NRprot7 (2000kcal-adjusted)](./results/plot_NRprot7_2000kcal-1.jpeg)
+
+
+### Summary of Metrics
+
+The **NRF metric** is composed of two parts:  
+
+* **Favourable nutrients:** NRprot7  
+* **Disqualifying nutrients:** LIM2  
+
+As seen in previous section ([nFU comparison](### nFU (qc-Protein and NRF))), animal proteins rank lower in the NRF metric compared to plant proteins. But wyh? We compare the different submetrics for the NRF.  
+
  
-  
-
-  plot_combined <- aa + ab  +plot_annotation(tag_levels = "A")
-
-
-    ggsave(file.path(working_dir_output, paste0("plot_",nfu_value, "-",i, ".jpeg")),
-           plot_combined, device = "jpeg", width = 30, height = 20, dpi="retina")
-    ggsave(file.path(working_dir_output, paste0("plot_",nfu_value,"-", i, ".eps")), plot_combined, device = "eps", width = 30,height = 20)
-    
-  #     ggsave(file.path(working_dir_output, paste0("NRF",nfu_value, "-",i, ".jpeg")),
-   #           abc , device = "jpeg", width = 30, height = 20)
-  #  ggsave(file.path(working_dir_output, paste0("NRF",nfu_value,"-", i, ".eps")), abc, device = "eps")
-
-   }
-}
-
-
-
-```
-
 ```{r NRF}
-# Add an empty row for NRprot7 and LIM2 as placeholder
-NRF <- tidy_d1_CH %>% filter(gender == "unisex",
-                              impact == "NRprot7"  | impact == "LIM2") %>%
-  add_row(item = " ",impact = "NRprot7") %>%
-  add_row(item = " ",impact="LIM2")
+# -----------------------------------------------------------------------------
+# 1. Prepare NRF dataset
+#    - Select only relevant impacts ("NRprot7", "LIM2")
+#    - Add empty placeholder rows for layout consistency
+# -----------------------------------------------------------------------------
+NRF <- tidy_d1_CH %>%
+  filter(
+    gender == "unisex",
+    impact == "NRprot7" | impact == "LIM2"
+  ) %>%
+  add_row(item = " ", impact = "NRprot7") %>%  # empty row as separator
+  add_row(item = " ", impact = "LIM2")         # empty row as separator
 
-NRF <- NRF %>% mutate(item = factor(item,levels=c("Beef (CH), minced",
-                                          "Chicken (CH) meat",
-                                          "SBMA",
-                                          "Tofu, plain",
-                                          "Soybeans, cooked",
-                                          " ",
-                                           "Cow milk (CH), UHT",
-                                         "Soydrink, UHT")))
+# -----------------------------------------------------------------------------
+# 2. Define factor levels for items and impacts
+#    - Ensures consistent order of items on the plot
+# -----------------------------------------------------------------------------
+NRF <- NRF %>%
+  mutate(
+    item = factor(
+      item,
+      levels = c(
+        "Beef (CH), minced",
+        "Chicken (CH) meat",
+        "SBMA",
+        "Tofu, plain",
+        "Soybeans, cooked",
+        " ",                      # blank separator
+        "Cow milk (CH), UHT",
+        "Soydrink, UHT"
+      )
+    ),
+    impact = factor(impact, levels = c("NRprot7", "LIM2"))
+  )
 
-NRF <- NRF %>% mutate(impact = factor(impact, levels = c("NRprot7","LIM2")))
+# -----------------------------------------------------------------------------
+# 3. Define custom color palette
+#    - Adds transparent white to create a visual gap (for empty row)
+# -----------------------------------------------------------------------------
+transparent_white <- adjustcolor("white", alpha.f = 0)  # fully transparent white
 
-# Adding transparent white color to the color palette
-transparent_white <- adjustcolor("white", alpha.f = 0)  # Creating transparent white color
+cbp1_new <- c(
+  "#000000", "#E69F00", "#56B4E9", "#009E73", "#999999",
+  transparent_white,   # blank entry separator
+  "#0072B2", "#F0E442"
+)
 
-cbp1_new <- c("#000000", "#E69F00", "#56B4E9", "#009E73","#999999",
-          transparent_white, #
-          "#0072B2","#F0E442")
+# -----------------------------------------------------------------------------
+# 4. Create bar plot for NRF and LIM2 comparison
+# -----------------------------------------------------------------------------
+abc <- NRF %>%
+  ggplot(aes(impact, mean_1, fill = item)) +
+  geom_col(position = dodge) +                            # main bars
+  scale_fill_manual(values = cbp1_new) +                  # manual colors
+  geom_hline(yintercept = 100) +                          # reference line
+  labs(
+    x = "",
+    y = "Sub-scores relative to beef or cow milk [%]"
+  ) +
+  theme(
+    legend.position = "right",
+    legend.title = element_blank()
+  )
 
+# -----------------------------------------------------------------------------
+# 5. Save plots in JPEG and EPS formats
+# -----------------------------------------------------------------------------
+ggsave(
+  file.path(working_dir_output, "nrf_comparison.jpeg"),
+  abc,
+  device = "jpeg",
+  width = 30, height = 20, dpi = "retina"
+)
 
-abc <- NRF%>% 
-          ggplot(aes(impact,mean_1, fill=item)) +
-          geom_col(position = dodge)+
-          #facet_grid(rows = vars(mm), scales = "free", space = "free_y") +
-          scale_fill_manual(values = cbp1_new)+
-          geom_hline(yintercept = 100)+
-             # geom_errorbar(aes(ymin=ymin_new1,ymax=  ymax_new1),position = dodge, width = 0.5) +
-                    labs(x = "", y = " Sub-scores relative to beef or cow milk [%]") +#x axis, y axis
-                    theme(legend.position = "right",legend.title=element_blank()) 
-                           # guides(fill=guide_legend(ncol=1))
-
-ggsave(file.path(working_dir_output, "nrf_comparison.jpeg"), abc, device = "jpeg", width = 30, height = 20, dpi="retina")
-  ggsave(file.path(working_dir_output, "nrf_comparison.eps"), abc, device = "eps", width = 30,height = 20)
+ggsave(
+  file.path(working_dir_output, "nrf_comparison.eps"),
+  abc,
+  device = "eps",
+  width = 30, height = 20
+)
 ```
+![Submetrics of NRF calculations visualisation](./results/nrf_comparison.jpeg)
 
-## Graphical abstract
+## Graphical abstract and Poster
 
-Select subset of data from the full data. in particular, only result from the NRprot7 calculations with average DRI for adults are taken into account
+A subset of the full dataset is used for the graphical abstract. Only results from **NRprot7 calculations**, using the **average DRI for adults**, are included.  
 
-```{r graphical_abstract}
+Focus is on three key impact indicators:  
+
+* **GWP100 (CO₂-eq)**  
+* **Water scarcity (m³)**  
+* **Land occupation per year (m²a)**  
+
+
+```{r graphical_abstract, include=FALSE,echo=FALSE}
 cbp1_new <- c("#E69F00", "#56B4E9", "#009E73","#999999",
           transparent_white,"#F0E442")
 
@@ -517,56 +807,130 @@ ggsave(file.path(working_dir_output, "graphical_abstract.jpeg"),draft1, device =
   
 ```
 
-Additional work for Poster session 
+
 ```{r poster}
 
-cbp1_new <- c("#000000", "#E69F00", "#0072B2", "#F0E442","#D55E00","#009E73")
+# -----------------------------------------------------------------------------
+# 1. Define custom color palette for the poster
+# -----------------------------------------------------------------------------
+cbp1_new <- c("#000000", "#E69F00", "#0072B2", "#F0E442", "#D55E00", "#009E73")
 
-poster0 <- tidy_d1_CH %>% filter(gender == "unisex",
-                              nfu == "NRprot7_2000kcal",
-                              country == "CH",
-                              reference == "adult") %>%
-                                  select(item,impact, mean_1) %>% mutate(mean_1 = round(mean_1,0)) %>% 
-  filter(impact != "CED [MJ]",
-         impact != "Eutr-fw [kg P-eq]",
-         impact != "Acid-terr [kg SO2-eq]",
-         impact != "NRprot7",
-         impact != "LIM2",
-         impact != "NRF")
+# -----------------------------------------------------------------------------
+# 2. Filter base dataset for poster (CH, adult, unisex, NRprot7_2000kcal)
+#    - Select relevant impacts and round mean values
+#    - Exclude unused impact categories
+# -----------------------------------------------------------------------------
+poster0 <- tidy_d1_CH %>%
+  filter(
+    gender == "unisex",
+    nfu == "NRprot7_2000kcal",
+    country == "CH",
+    reference == "adult"
+  ) %>%
+  select(item, impact, mean_1) %>%
+  mutate(mean_1 = round(mean_1, 0)) %>%
+  filter(
+    impact != "CED [MJ]",
+    impact != "Eutr-fw [kg P-eq]",
+    impact != "Acid-terr [kg SO2-eq]",
+    impact != "NRprot7",
+    impact != "LIM2",
+    impact != "NRF"
+  )
 
-poster1 <- poster0 %>% filter(item == "SBMA" | item == "Chicken (CH) meat") %>% mutate( item = ifelse(item == "SBMA","Soy burger", "Chicken meat"))
+# -----------------------------------------------------------------------------
+# 3. Prepare subset for key products (soy burger and chicken meat)
+#    - Rename "SBMA" → "Soy burger"
+# -----------------------------------------------------------------------------
+poster1 <- poster0 %>%
+  filter(item == "SBMA" | item == "Chicken (CH) meat") %>%
+  mutate(item = ifelse(item == "SBMA", "Soy burger", "Chicken meat"))
 
-poster2 <- poster1 %>% add_row(poster0 %>% filter(item=="Beef (CH), minced")) %>% mutate(item = ifelse(item == "Beef (CH), minced", "Beef, minced", item)) %>% pivot_wider(names_from = impact,values_from = mean_1) 
+# -----------------------------------------------------------------------------
+# 4. Add beef reference and reshape to wide format
+#    - Rename "Beef (CH), minced" → "Beef, minced"
+#    - Each column = impact
+# -----------------------------------------------------------------------------
+poster2 <- poster1 %>%
+  add_row(poster0 %>% filter(item == "Beef (CH), minced")) %>%
+  mutate(item = ifelse(item == "Beef (CH), minced", "Beef, minced", item)) %>%
+  pivot_wider(names_from = impact, values_from = mean_1)
 
-names(poster2) <- gsub("\\[(.*?)\\]", "", names(poster2)) 
- 
-poster3 <- poster2%>% pivot_longer(cols = 2:4, names_to = "impact", values_to = "mean_1" ) %>% mutate(type = "Impact [%] of beef") %>% 
-  add_row(item = "Soy burger",impact = "NRprot7", mean_1 = 139.6, type="nutrient density") %>%
-  add_row(item = "Soy burger",impact="LIM2",mean_1 = 33.3, type="nutrient density") %>% 
-  add_row(item = "Soy burger",impact = "NRF", mean_1 = 139.7-33.3, type="nutrient density") %>%
-  add_row(item = "Chicken meat",impact="NRprot7", mean_1= 81.8, type="nutrient density") %>% 
-  add_row(item = "Chicken meat",impact = "LIM2", mean_1 = 2.7, type="nutrient density") %>% 
-  add_row(item = "Chicken meat",impact = "NRF", mean_1 = 81.8-2.7, type="nutrient density") %>% 
-  add_row(item ="Beef, minced", impact = "NRprot7", mean_1= 211.7, type="nutrient density") %>%
-  add_row(item ="Beef, minced", impact = "LIM2", mean_1= 19.5, type="nutrient density") %>% 
-  add_row(item ="Beef, minced", impact = "NRF", mean_1= 211.7-19.5, type="nutrient density") %>% 
-          mutate(impact= factor(impact,levels=c("GWP100 ","Land-occ ","Water-scar ","NRprot7","LIM2","NRF"))) %>%  mutate(mean_1 =ifelse(mean_1 >220,150,mean_1))
+# Remove square brackets from impact names for readability
+names(poster2) <- gsub("\\[(.*?)\\]", "", names(poster2))
 
-  poster3 %>% ggplot(aes(item,mean_1, fill= impact)) +
-          geom_col(position = "dodge") +
-            scale_fill_manual(values = cbp1_new) +
-          facet_grid((type ~ .))+
-              labs(y = "", x = "")+
-              guides(fill=guide_legend(ncol=2))+
-              theme(strip.text = element_text(size = 50, face = "bold"))+
-                    theme(legend.position = "right",legend.title=element_blank(),
-                          legend.text = element_text(size = 55, face = "bold"),
-                          axis.text.y=element_text(size=50, face="bold"),
-                          axis.text.x = element_text(size=50,face = "bold"))+
-                          scale_x_discrete(labels = label_wrap(width=11))
+# -----------------------------------------------------------------------------
+# 5. Reshape and add nutrient density indicators manually
+#    - Adds NRprot7, LIM2, and NRF sub-scores for each product
+#    - Capped at mean_1 ≤ 220 for visual scaling
+# -----------------------------------------------------------------------------
+poster3 <- poster2 %>%
+  pivot_longer(cols = 2:4, names_to = "impact", values_to = "mean_1") %>%
+  mutate(type = "Impact [%] of beef") %>%
 
-ggsave(file.path(working_dir_output, "poster.jpeg"), device = "jpeg", width = 30, height = 20)
-  ggsave(file.path(working_dir_output, "poster.eps"), device = "eps", width = 30,height = 20)
+  # Nutrient density sub-scores for Soy burger
+  add_row(item = "Soy burger", impact = "NRprot7", mean_1 = 139.6, type = "nutrient density") %>%
+  add_row(item = "Soy burger", impact = "LIM2", mean_1 = 33.3, type = "nutrient density") %>%
+  add_row(item = "Soy burger", impact = "NRF", mean_1 = 139.7 - 33.3, type = "nutrient density") %>%
 
-  
+  # Nutrient density sub-scores for Chicken meat
+  add_row(item = "Chicken meat", impact = "NRprot7", mean_1 = 81.8, type = "nutrient density") %>%
+  add_row(item = "Chicken meat", impact = "LIM2", mean_1 = 2.7, type = "nutrient density") %>%
+  add_row(item = "Chicken meat", impact = "NRF", mean_1 = 81.8 - 2.7, type = "nutrient density") %>%
+
+  # Nutrient density sub-scores for Beef
+  add_row(item = "Beef, minced", impact = "NRprot7", mean_1 = 211.7, type = "nutrient density") %>%
+  add_row(item = "Beef, minced", impact = "LIM2", mean_1 = 19.5, type = "nutrient density") %>%
+  add_row(item = "Beef, minced", impact = "NRF", mean_1 = 211.7 - 19.5, type = "nutrient density") %>%
+
+  mutate(
+    impact = factor(
+      impact,
+      levels = c("GWP100 ", "Land-occ ", "Water-scar ", "NRprot7", "LIM2", "NRF")
+    ),
+    mean_1 = ifelse(mean_1 > 220, 150, mean_1)  # cap values for readability
+  )
+
+# -----------------------------------------------------------------------------
+# 6. Create poster plot
+#    - Facet by "Impact [%] of beef" vs. "nutrient density"
+#    - Use bold large text for poster visibility
+# -----------------------------------------------------------------------------
+final <- poster3 %>%
+  ggplot(aes(item, mean_1, fill = impact)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = cbp1_new) +
+  facet_grid(type ~ .) +
+  labs(y = "", x = "") +
+  guides(fill = guide_legend(ncol = 2)) +
+  theme(
+    strip.text = element_text(size = 50, face = "bold"),
+    legend.position = "right",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 55, face = "bold"),
+    axis.text.y = element_text(size = 50, face = "bold"),
+    axis.text.x = element_text(size = 50, face = "bold")
+  ) +
+  scale_x_discrete(labels = label_wrap(width = 11))
+
+# -----------------------------------------------------------------------------
+# 7. Export poster figure in both JPEG and EPS formats
+# -----------------------------------------------------------------------------
+ggsave(
+  file.path(working_dir_output, "poster.jpeg"),
+  final,
+  device = "jpeg",
+  width = 30, height = 20
+)
+
+ggsave(
+  file.path(working_dir_output, "poster.eps"),
+  final,
+  device = "eps",
+  width = 30, height = 20
+)
+
 ```
+
+![Graphical abstract for the Paper.](./results/poster.jpeg){width=70%}
+
